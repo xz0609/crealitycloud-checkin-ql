@@ -32,6 +32,7 @@ new Env('创想云签到')
 
 import json
 import os
+import random
 import ssl
 import sys
 import time
@@ -66,6 +67,10 @@ def notify_user(title, content):
 
 # 环境变量名（青龙面板中配置，格式：每行「账号 密码」，多账号换行分隔）
 ENV_ACCOUNTS = "CREALITY_ACCOUNTS"
+
+# 随机延时开关与上限（签到开始前的整体随机延时，防风控）
+ENV_RANDOM_SIGNIN = "RANDOM_SIGNIN"        # 开关：默认 true 开启，设 false 关闭
+ENV_MAX_RANDOM_DELAY = "MAX_RANDOM_DELAY"  # 随机延时上限（秒），默认 3600
 
 # 内置账号配置：仅当环境变量未设置时生效
 # 格式：每行「账号 密码」（账号与密码用空格分隔）；手机号自动补 86 区号，邮箱直接填
@@ -134,6 +139,57 @@ def mask_account(account):
     if len(account) <= 6:
         return "****"
     return account[:3] + "****" + account[-2:]
+
+
+def mask_uid(uid):
+    """用户 ID 脱敏：保留前 3 后 2，中间打码。"""
+    s = str(uid or "")
+    if len(s) <= 6:
+        return "****"
+    return s[:3] + "****" + s[-2:]
+
+
+def _fmt_seconds(seconds):
+    """把秒数格式化为可读时长（如 1小时2分3秒）。"""
+    seconds = int(seconds)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}小时{m}分{s}秒"
+    if m:
+        return f"{m}分{s}秒"
+    return f"{s}秒"
+
+
+def random_delay():
+    """签到开始前的整体随机延时（防风控）。
+
+    RANDOM_SIGNIN 默认 true 开启；MAX_RANDOM_DELAY 为上限秒数，默认 3600。
+    分段 sleep 并打印倒计时，避免长时间静默。返回实际延时秒数。
+    """
+    random_signin = os.getenv(ENV_RANDOM_SIGNIN, "true").lower() == "true"
+    if not random_signin:
+        return 0
+    try:
+        max_delay = int(os.getenv(ENV_MAX_RANDOM_DELAY, "3600") or "3600")
+    except ValueError:
+        max_delay = 3600
+    if max_delay <= 0:
+        return 0
+
+    delay = random.randint(0, max_delay)
+    if delay <= 0:
+        return 0
+
+    print(f"🎲 随机延时 {_fmt_seconds(delay)}")
+    remaining = delay
+    while remaining > 0:
+        if remaining <= 10 or remaining % 10 == 0:
+            print(f"   倒计时: {_fmt_seconds(remaining)}")
+        step = 1 if remaining <= 10 else min(10, remaining)
+        time.sleep(step)
+        remaining -= step
+    return delay
 
 
 def _build_opener():
@@ -460,7 +516,7 @@ def run_single(account, password):
 
     try:
         token, uid, opener = login(account, password)
-        msgs.append(f"✅ 登录成功 uid={uid}")
+        msgs.append(f"✅ 登录成功 uid={mask_uid(uid)}")
 
         # 1) 查询最近签到状态（判断今天是否已签到）
         last = get_last_checkin(token, uid)
@@ -556,10 +612,18 @@ def main():
 
     print(f"共 {len(accounts)} 个账号待签到\n")
 
+    # 签到开始前的整体随机延时（防风控）
+    random_delay()
+
     summary = []
     detail_lines = []
     for i, (acc, pwd) in enumerate(accounts, 1):
         masked = mask_account(acc)
+        # 账号间固定随机等待（仅第 2 个账号起，避免多账号请求过于密集）
+        if i > 1:
+            delay = random.uniform(10, 30)
+            print(f"⏱️ 随机等待 {delay:.1f} 秒后处理下一个账号…")
+            time.sleep(delay)
         print(f"[{i}/{len(accounts)}] 账号 {masked} …")
         ok, msgs = run_single(acc, pwd)
         for m in msgs:
