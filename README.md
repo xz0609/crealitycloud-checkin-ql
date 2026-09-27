@@ -19,7 +19,7 @@
 ## 📁 目录结构
 
 ```
-crealitycloud-checkin/
+crealitycloud-checkin-ql/
 ├── crealitycloud_checkin.py   # 签到脚本（青龙面板格式，含 cron + new Env 声明）
 └── README.md                  # 本文档
 ```
@@ -28,7 +28,10 @@ crealitycloud-checkin/
 
 ### 1. 上传脚本
 
-- **方法一、📌 订阅仓库**：在青龙「订阅管理」中添加订阅，拉取脚本仓库后，脚本自动出现在脚本管理中。
+- **方法一、📌 订阅仓库（推荐）**：在青龙面板「订阅管理」中新建订阅，类型选 `公开仓库`，粘贴下方订阅地址，保存并运行后，脚本自动出现在「脚本管理」中。
+
+  订阅地址： `https://wget.la/https://github.com/xz0609/crealitycloud-checkin-ql.git`
+
 - **方法二、上传脚本**：将 `crealitycloud_checkin.py` 上传到青龙面板「脚本管理」。
 
 ### 2. 配置账号
